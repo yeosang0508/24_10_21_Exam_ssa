@@ -1,101 +1,410 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import * as React from 'react';
+import {
+  AppBar,
+  Toolbar,
+  Button,
+  Alert as MuiAlert,
+  TextField,
+  CssBaseline,
+  Chip,
+  Drawer,
+  SwipeableDrawer,
+  List,
+  ListItem,
+  Divider,
+  ListItemButton,
+  Modal,
+  Snackbar,
+  Alert,
+  Box,
+} from '@mui/material';
+import { ThemeProvider } from '@emotion/react';
+import classNames from 'classnames';
+import { RecoilRoot, atom, selector, useRecoilState, useRecoilValue } from 'recoil';
+import { FaBars, FaCheck, FaEllipsisH, FaTrash, FaEllipsisV } from 'react-icons/fa';
+import { FaPenToSquare } from 'react-icons/fa6';
+import dateToStr from './dateUtil';
+import RootTheme from './theme';
+
+const todosAtom = atom({
+  key: 'app/todosAtom',
+  default: [],
+});
+
+const lastTodoIdAtom = atom({
+  key: 'app/lastTodoIdAtom',
+  default: 0,
+});
+
+function useTodosStatus() {
+  const [todos, setTodos] = useRecoilState(todosAtom);
+  const [lastTodoId, setLastTodoId] = useRecoilState(lastTodoIdAtom);
+  const lastTodoIdRef = React.useRef(lastTodoId);
+
+  lastTodoIdRef.current = lastTodoId;
+
+  const addTodo = (newContent) => {
+    const id = ++lastTodoIdRef.current;
+    setLastTodoId(id);
+    const newTodo = {
+      id,
+      content: newContent,
+      regDate: dateToStr(new Date()),
+      isCompleted: false, // 완료 여부 추가
+    };
+    setTodos((todos) => [newTodo, ...todos]);
+
+    return id;
+  };
+
+  const removeTodo = (id) => {
+    const newTodos = todos.filter((todo) => todo.id !== id);
+    setTodos(newTodos);
+  };
+
+  const toggleComplete = (id) => {
+    setTodos((prevTodos) =>
+      prevTodos.map((todo) =>
+        todo.id === id ? { ...todo, isCompleted: !todo.isCompleted } : todo
+      )
+    );
+  };
+
+  return {
+    todos,
+    addTodo,
+    removeTodo,
+    toggleComplete, // 여기에 올바르게 반환
+  };
+}
+
+const NewTodoForm = ({ noticeSnackbarStatus }) => {
+  const todosStatus = useTodosStatus();
+  const onSubmit = (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    form.content.value = form.content.value.trim();
+    if (form.content.value.length == 0) {
+      alert('할 일 써');
+      form.content.focus();
+      return;
+    }
+    const newTodoId = todosStatus.addTodo(form.content.value);
+    form.content.value = '';
+    form.content.focus();
+    noticeSnackbarStatus.open(`${newTodoId}번 todo 추가됨`);
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+    <>
+      <form className="tw-flex tw-flex-col tw-p-4 tw-gap-2" onSubmit={(e) => onSubmit(e)}>
+        <TextField
+          multiline
+          maxRows={4}
+          name="content"
+          id="outlined-basic"
+          label="할 일 입력"
+          variant="outlined"
+          color="success"
+          autoComplete="off"
         />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+        <Button className="tw-text-bold" variant="outlined" color="success" type="submit">
+          추가
+        </Button>
+      </form>
+    </>
+  );
+};
+const TodoListItem = ({ todo, index, toggleComplete }) => (
+  <li className="tw-mb-3" key={todo.id}>
+    <div className="tw-flex tw-flex-col tw-gap-2 tw-mt-3">
+      <div className="tw-flex tw-gap-x-2 tw-font-bold">
+        <Chip className="tw-pt-[3px]" label={`번호 : ${todo.id}`} variant="outlined" />
+        <Chip
+          className="tw-pt-[3px]"
+          label={`날짜 : ${todo.regDate}`}
+          variant="outlined"
+          color="success"
+        />
+      </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      <div className="tw-rounded-[10px] tw-shadow tw-flex tw-text-[14px] tw-min-h-[80px]">
+        <Button
+          onClick={() => toggleComplete(todo.id)} // 클릭 시 완료 여부 토글
+          className="tw-flex-shrink-0 tw-rounded-[10px_0_0_10px]"
+          color="inherit"
+        >
+          <FaCheck
+            className={classNames(
+              'tw-text-3xl',
+              todo.isCompleted
+                ? 'tw-text-[--mui-color-success-main]'
+                : 'tw-text-[#dcdcdc]'
+            )}
+          />
+        </Button>
+
+        <div className="tw-bg-[#dcdcdc] tw-w-[2px] tw-h-[60px] tw-self-center"></div>
+
+        <div
+          className={classNames(
+            'tw-flex tw-items-center tw-p-3 tw-flex-grow hover:tw-text-[--mui-color-success-main] tw-whitespace-pre-wrap tw-leading-relaxed tw-break-words',
+            { 'tw-line-through': todo.isCompleted } // 완료 시 취소선 적용
+          )}
+        >
+          할 일 : {todo.content}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
+  </li>
+);
+
+
+// 해당 todo option에 대한 drawer 열기, 닫기
+function useTodoOptionDrawerStatus() {
+  const [todoId, setTodoId] = React.useState(null);
+  const opened = React.useMemo(() => todoId !== null, [todoId]);
+
+  const open = (id) => setTodoId(id);
+  const close = () => setTodoId(null);
+  return {
+    todoId,
+    open,
+    close,
+    opened,
+  };
+}
+
+// modal 열기, 닫기
+function useEditTodoModalStatus() {
+  const [opened, setOpened] = React.useState(false);
+
+  const open = () => {
+    setOpened(true);
+  };
+
+  const close = () => {
+    setOpened(false);
+  };
+
+  return {
+    opened,
+    open,
+    close,
+  };
+}
+
+function EditTodoModal({ status, todo, noticeSnackbarStatus }) {
+  const todosStatus = useTodosStatus();
+  const onSubmit = (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    form.content.value = form.content.value.trim();
+    if (form.content.value.length == 0) {
+      alert('할 일 써');
+      form.content.focus();
+      return;
+    }
+    // modify v1
+    todosStatus.modifyTodo(todo.id, form.content.value);
+    status.close();
+
+    noticeSnackbarStatus.open(`${todo.id}번 todo 수정됨`);
+
+    // modify v2
+    // todosStatus.modifyTodoById(todo.id, form.content.value);
+  };
+  return (
+    <>
+      <Modal
+        open={status.opened}
+        onClose={status.close}
+        className="tw-flex tw-justify-center tw-items-center">
+        <div className="tw-bg-white tw-p-10 tw-rounded-[20px] tw-w-full tw-max-w-lg">
+          <form onSubmit={onSubmit} className="tw-flex tw-flex-col tw-gap-2">
+            <TextField
+              minRows={3}
+              maxRows={10}
+              multiline
+              name="content"
+              autoComplete="off"
+              variant="outlined"
+              label="할 일 써"
+              defaultValue={todo?.content}
+            />
+            <Button variant="contained" className="tw-font-bold" type="submit">
+              수정
+            </Button>
+          </form>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+function TodoOptionDrawer({ status, noticeSnackbarStatus }) {
+  const todosStatus = useTodosStatus();
+  const removeTodo = () => {
+    if (confirm(`${status.todoId}번 할 일을 삭제하시겠습니까?`) == false) {
+      status.close();
+      return;
+    }
+    todosStatus.removeTodo(status.todoId);
+    status.close();
+    noticeSnackbarStatus.open(`${status.todoId}번 todo 삭제됨`, 'error');
+  };
+
+  const editTodoModalStatus = useEditTodoModalStatus();
+
+  const todo = todosStatus.findTodoById(status.todoId);
+
+  return (
+    <>
+      <EditTodoModal
+        status={editTodoModalStatus}
+        todosStatus={todosStatus}
+        todo={todo}
+        noticeSnackbarStatus={noticeSnackbarStatus}
+      />
+      <SwipeableDrawer anchor="top" open={status.opened} onClose={status.close} onOpen={() => {}}>
+        <List>
+          <ListItem className="tw-flex tw-gap-2 tw-p-[15px]">
+            <span className="tw-text-[--mui-color-primary-main]">{todo?.id}번</span>{' '}
+            {/*옵셔널 체이닝*/}
+            <span className="tw-text-[--mui-color-primary-main]">{status.todoId}번 </span>
+            <span>Your Todo</span>
+          </ListItem>
+          <Divider className="tw-my-[5px]" />
+          <ListItemButton
+            onClick={editTodoModalStatus.open}
+            className="tw-p-[15px_20px] tw-flex tw-gap-2 tw-items-center">
+            <span>수정</span>
+            <FaPenToSquare className="block tw-mt-[-5px]" />
+          </ListItemButton>
+          <ListItemButton
+            className="tw-p-[15px_20px] tw-flex tw-gap-2 tw-items-center"
+            onClick={removeTodo}>
+            <span>삭제</span>
+            <FaTrash className="block tw-mt-[-5px]" />
+          </ListItemButton>
+        </List>
+      </SwipeableDrawer>
+    </>
+  );
+}
+
+const TodoList = () => {
+  const todosStatus = useTodosStatus();
+
+  return (
+    <List>
+      {todosStatus.todos.map((todo, index) => (
+        <TodoListItem
+          key={todo.id}
+          todo={todo}
+          index={index}
+          toggleComplete={todosStatus.toggleComplete} // 함수 전달
+        />
+      ))}
+    </List>
+  );
+};
+
+
+function NoticeSnackbar({ status }) {
+  return (
+    <>
+      <Snackbar
+        open={status.opened}
+        autoHideDuration={status.autoHideDuration}
+        onClose={status.close}>
+        <Alert variant={status.variant} severity={status.severity}>
+          {status.msg}
+        </Alert>
+      </Snackbar>
+    </>
+  );
+}
+function useNoticeSnackbarStatus() {
+  const [opened, setOpened] = React.useState(false);
+  const [autoHideDuration, setAutoHideDuration] = React.useState(null);
+  const [variant, setVariant] = React.useState(null);
+  const [severity, setSeverity] = React.useState(null);
+  const [msg, setMsg] = React.useState(null);
+  const open = (msg, severity = 'success', autoHideDuration = 3000, variant = 'filled') => {
+    setOpened(true);
+    setMsg(msg);
+    setSeverity(severity);
+    setAutoHideDuration(autoHideDuration);
+    setVariant(variant);
+  };
+  const close = () => {
+    setOpened(false);
+  };
+  return {
+    opened,
+    open,
+    close,
+    autoHideDuration,
+    variant,
+    severity,
+    msg,
+  };
+}
+
+function App() {
+  const todosStatus = useTodosStatus();
+
+  const [open, setOpen] = React.useState(false);
+
+  const noticeSnackbarStatus = useNoticeSnackbarStatus();
+
+  React.useEffect(() => {
+    todosStatus.addTodo('이메일 및 일정 확인');
+    todosStatus.addTodo('회의 참석');
+    todosStatus.addTodo('프로젝트 진행(코딩, 문서 작성 등');
+  }, []);
+
+  return (
+    <>
+      <Snackbar open={open} autoHideDuration={4000} onClose={() => setOpen(false)}>
+        <Alert variant="filled" severity="sucess">
+          게시물 삭제됨
+        </Alert>
+      </Snackbar>
+      <AppBar   position="fixed"
+         sx={{ backgroundColor: '#4caf50' }}>
+        <Toolbar>
+          <div className="tw-flex-1">
+            <FaBars onClick={() => setOpen(true)} className="tw-cursor-pointer" />
+          </div>
+          <div className="logo-box">
+            <a href="/" className="tw-font-bold">
+              로고
+            </a>
+          </div>
+          <div className="tw-flex-1 tw-flex tw-justify-end">글쓰기</div>
+        </Toolbar>
+      </AppBar>
+      <Toolbar />
+      <NoticeSnackbar status={noticeSnackbarStatus} />
+      <NewTodoForm noticeSnackbarStatus={noticeSnackbarStatus} />
+      <TodoList noticeSnackbarStatus={noticeSnackbarStatus} />
+    </>
+  );
+}
+
+export default function themeApp() {
+  const theme = RootTheme();
+
+  return (
+    <RecoilRoot>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <App />
+      </ThemeProvider>
+    </RecoilRoot>
   );
 }
