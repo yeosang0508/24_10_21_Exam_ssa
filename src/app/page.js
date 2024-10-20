@@ -38,30 +38,43 @@ const lastTodoIdAtom = atom({
   default: 0,
 });
 
-function useTodosStatus() {
-  const [todos, setTodos] = useRecoilState(todosAtom);
-  const [lastTodoId, setLastTodoId] = useRecoilState(lastTodoIdAtom);
-  const lastTodoIdRef = React.useRef(lastTodoId);
 
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+function useTodosStatus() {
+  const [todos, setTodos] = useState(() => {
+    const savedTodos = JSON.parse(localStorage.getItem('todos')) || [];
+    return savedTodos;
+  });
+
+  const [lastTodoId, setLastTodoId] = useState(() => {
+    return JSON.parse(localStorage.getItem('lastTodoId')) || 0;
+  });
+
+  const lastTodoIdRef = useRef(lastTodoId);
   lastTodoIdRef.current = lastTodoId;
+
+  useEffect(() => {
+    localStorage.setItem('todos', JSON.stringify(todos));
+    localStorage.setItem('lastTodoId', JSON.stringify(lastTodoId));
+  }, [todos, lastTodoId]);
 
   const addTodo = (newContent) => {
     const id = ++lastTodoIdRef.current;
     setLastTodoId(id);
+
     const newTodo = {
       id,
       content: newContent,
-      regDate: dateToStr(new Date()),
-      isCompleted: false, // 완료 여부 추가
+      regDate: new Date().toLocaleString(),
+      isCompleted: false,
     };
-    setTodos((todos) => [newTodo, ...todos]);
 
-    return id;
+    setTodos((prevTodos) => [newTodo, ...prevTodos]);
   };
 
   const removeTodo = (id) => {
-    const newTodos = todos.filter((todo) => todo.id !== id);
-    setTodos(newTodos);
+    setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== id));
   };
 
   const toggleComplete = (id) => {
@@ -72,94 +85,131 @@ function useTodosStatus() {
     );
   };
 
+  const editTodo = (id, newContent) => {
+    setTodos((prevTodos) =>
+      prevTodos.map((todo) =>
+        todo.id === id ? { ...todo, content: newContent } : todo
+      )
+    );
+  };
+
   return {
     todos,
     addTodo,
     removeTodo,
-    toggleComplete, // 여기에 올바르게 반환
+    toggleComplete,
+    editTodo, // 반환에 포함
   };
 }
 
-const NewTodoForm = ({ noticeSnackbarStatus }) => {
-  const todosStatus = useTodosStatus();
-  const onSubmit = (e) => {
+
+const NewTodoForm = ({ onAddTodo }) => {
+  const [content, setContent] = useState('');
+
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    form.content.value = form.content.value.trim();
-    if (form.content.value.length == 0) {
-      alert('할 일 써');
-      form.content.focus();
+    if (content.trim() === '') {
+      alert('할 일을 입력하세요.');
       return;
     }
-    const newTodoId = todosStatus.addTodo(form.content.value);
-    form.content.value = '';
-    form.content.focus();
-    noticeSnackbarStatus.open(`${newTodoId}번 todo 추가됨`);
+    onAddTodo(content);
+    setContent('');
   };
 
   return (
-    <>
-      <form className="tw-flex tw-flex-col tw-p-4 tw-gap-2" onSubmit={(e) => onSubmit(e)}>
-        <TextField
-          multiline
-          maxRows={4}
-          name="content"
-          id="outlined-basic"
-          label="할 일 입력"
-          variant="outlined"
-          color="success"
-          autoComplete="off"
-        />
-        <Button className="tw-text-bold" variant="outlined" color="success" type="submit">
-          추가
-        </Button>
-      </form>
-    </>
+    <form onSubmit={handleSubmit} className="tw-flex tw-flex-col tw-p-4 tw-gap-2">
+      <TextField
+        multiline
+        maxRows={4}
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        label="할 일 입력"
+        variant="outlined"
+        color="success"
+        autoComplete="off"
+      />
+      <Button variant="outlined" color="success" type="submit">
+        추가
+      </Button>
+    </form>
   );
 };
-const TodoListItem = ({ todo, index, toggleComplete }) => (
-  <li className="tw-mb-3" key={todo.id}>
-    <div className="tw-flex tw-flex-col tw-gap-2 tw-mt-3">
-      <div className="tw-flex tw-gap-x-2 tw-font-bold">
-        <Chip className="tw-pt-[3px]" label={`번호 : ${todo.id}`} variant="outlined" />
-        <Chip
-          className="tw-pt-[3px]"
-          label={`날짜 : ${todo.regDate}`}
-          variant="outlined"
-          color="success"
-        />
-      </div>
 
-      <div className="tw-rounded-[10px] tw-shadow tw-flex tw-text-[14px] tw-min-h-[80px]">
-        <Button
-          onClick={() => toggleComplete(todo.id)} // 클릭 시 완료 여부 토글
-          className="tw-flex-shrink-0 tw-rounded-[10px_0_0_10px]"
-          color="inherit"
-        >
-          <FaCheck
-            className={classNames(
-              'tw-text-3xl',
-              todo.isCompleted
-                ? 'tw-text-[--mui-color-success-main]'
-                : 'tw-text-[#dcdcdc]'
-            )}
-          />
-        </Button>
+const TodoListItem = ({ todo, toggleComplete, removeTodo, editTodo }) => {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [newContent, setNewContent] = React.useState(todo.content);
 
-        <div className="tw-bg-[#dcdcdc] tw-w-[2px] tw-h-[60px] tw-self-center"></div>
+  const handleEditSubmit = (e) => {
+    e.preventDefault();
+    if (newContent.trim() === "") {
+      alert("수정할 내용을 입력하세요.");
+      return;
+    }
+    console.log(`Editing todo: ${todo.id}`); // 디버깅용 콘솔 출력
+    editTodo(todo.id, newContent); // editTodo 호출
+    setIsEditing(false); // 편집 모드 종료
+  };
 
-        <div
-          className={classNames(
-            'tw-flex tw-items-center tw-p-3 tw-flex-grow hover:tw-text-[--mui-color-success-main] tw-whitespace-pre-wrap tw-leading-relaxed tw-break-words',
-            { 'tw-line-through': todo.isCompleted } // 완료 시 취소선 적용
+  return (
+    <li className="tw-mb-3" key={todo.id}>
+      <div className="tw-flex tw-flex-col tw-gap-2 tw-mt-3">
+        <div className="tw-flex tw-gap-x-2 tw-font-bold">
+          <Chip className="tw-pt-[3px]" label={`번호: ${todo.id}`} variant="outlined" />
+          <Chip className="tw-pt-[3px]" label={`날짜: ${todo.regDate}`} color="success" />
+        </div>
+
+        <div className="tw-rounded-[10px] tw-shadow tw-flex tw-text-[14px] tw-min-h-[80px]">
+          <Button
+            onClick={() => toggleComplete(todo.id)}
+            className="tw-flex-shrink-0 tw-rounded-[10px_0_0_10px]"
+            color="inherit"
+          >
+            <FaCheck
+              className={classNames(
+                'tw-text-3xl',
+                todo.isCompleted ? 'tw-text-green-500' : 'tw-text-gray-300'
+              )}
+            />
+          </Button>
+
+          <div className="tw-bg-gray-300 tw-w-[2px] tw-h-[60px] tw-self-center"></div>
+
+          {isEditing ? (
+            <form onSubmit={handleEditSubmit} className="tw-flex tw-gap-2 tw-flex-grow">
+              <TextField
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                variant="outlined"
+                size="small"
+                color="success"
+                fullWidth
+              />
+              <Button type="submit" variant="contained" color="success">
+                저장
+              </Button>
+            </form>
+          ) : (
+            <div
+              className={classNames(
+                'tw-flex tw-items-center tw-p-3 tw-flex-grow hover:tw-text-green-500',
+                { 'tw-line-through': todo.isCompleted }
+              )}
+              onClick={() => setIsEditing(true)}
+            >
+              {todo.content}
+            </div>
           )}
-        >
-          할 일 : {todo.content}
+
+          <Button onClick={() => removeTodo(todo.id)} color="inherit">
+            <FaTrash className="tw-text-gray-300 tw-text-2xl" />
+          </Button>
         </div>
       </div>
-    </div>
-  </li>
-);
+    </li>
+  );
+};
+
+
 
 
 // 해당 todo option에 대한 drawer 열기, 닫기
@@ -211,7 +261,8 @@ function EditTodoModal({ status, todo, noticeSnackbarStatus }) {
     todosStatus.modifyTodo(todo.id, form.content.value);
     status.close();
 
-    noticeSnackbarStatus.open(`${todo.id}번 todo 수정됨`);
+    noticeSnackbarStatus.open(`${newTodoId}번 할 일이 추가되었습니다.`);
+
 
     // modify v2
     // todosStatus.modifyTodoById(todo.id, form.content.value);
@@ -295,17 +346,20 @@ function TodoOptionDrawer({ status, noticeSnackbarStatus }) {
   );
 }
 
-const TodoList = () => {
-  const todosStatus = useTodosStatus();
+const TodoList = ({ todos, onToggleComplete, onRemoveTodo, onEditTodo }) => {
+  if (todos.length === 0) {
+    return <p className="tw-text-center">할 일이 없습니다. 새 할 일을 추가하세요!</p>;
+  }
 
   return (
     <List>
-      {todosStatus.todos.map((todo, index) => (
+      {todos.map((todo) => (
         <TodoListItem
           key={todo.id}
           todo={todo}
-          index={index}
-          toggleComplete={todosStatus.toggleComplete} // 함수 전달
+          toggleComplete={onToggleComplete}
+          removeTodo={onRemoveTodo}
+          editTodo={onEditTodo} // 전달
         />
       ))}
     </List>
@@ -313,20 +367,13 @@ const TodoList = () => {
 };
 
 
-function NoticeSnackbar({ status }) {
-  return (
-    <>
-      <Snackbar
-        open={status.opened}
-        autoHideDuration={status.autoHideDuration}
-        onClose={status.close}>
-        <Alert variant={status.variant} severity={status.severity}>
-          {status.msg}
-        </Alert>
-      </Snackbar>
-    </>
-  );
-}
+
+const NoticeSnackbar = ({ message, onClose }) => (
+  <Snackbar open={!!message} autoHideDuration={3000} onClose={onClose}>
+    <Alert severity="success">{message}</Alert>
+  </Snackbar>
+);
+
 function useNoticeSnackbarStatus() {
   const [opened, setOpened] = React.useState(false);
   const [autoHideDuration, setAutoHideDuration] = React.useState(null);
@@ -354,49 +401,43 @@ function useNoticeSnackbarStatus() {
   };
 }
 
-function App() {
-  const todosStatus = useTodosStatus();
+const App = () => {
+  const { todos, addTodo, removeTodo, toggleComplete, editTodo } = useTodosStatus(); // editTodo 포함
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  const [open, setOpen] = React.useState(false);
+  const handleAddTodo = (content) => {
+    addTodo(content);
+    setSnackbarMessage('할 일이 추가되었습니다!');
+  };
 
-  const noticeSnackbarStatus = useNoticeSnackbarStatus();
-
-  React.useEffect(() => {
-    todosStatus.addTodo('이메일 및 일정 확인');
-    todosStatus.addTodo('회의 참석');
-    todosStatus.addTodo('프로젝트 진행(코딩, 문서 작성 등');
-  }, []);
+  const handleCloseSnackbar = () => setSnackbarMessage('');
 
   return (
     <>
-      <Snackbar open={open} autoHideDuration={4000} onClose={() => setOpen(false)}>
-        <Alert variant="filled" severity="sucess">
-          게시물 삭제됨
-        </Alert>
-      </Snackbar>
-      <AppBar   position="fixed"
-         sx={{ backgroundColor: '#4caf50' }}>
+      <AppBar position="fixed" sx={{ backgroundColor: '#4caf50' }}>
         <Toolbar>
-          <div className="tw-flex-1">
-            <FaBars onClick={() => setOpen(true)} className="tw-cursor-pointer" />
-          </div>
-          <div className="logo-box">
-            <a href="/" className="tw-font-bold">
-              로고
-            </a>
-          </div>
-          <div className="tw-flex-1 tw-flex tw-justify-end">글쓰기</div>
+          <FaBars className="tw-cursor-pointer" />
+          <div className="tw-flex-1 tw-text-center">로고</div>
         </Toolbar>
       </AppBar>
       <Toolbar />
-      <NoticeSnackbar status={noticeSnackbarStatus} />
-      <NewTodoForm noticeSnackbarStatus={noticeSnackbarStatus} />
-      <TodoList noticeSnackbarStatus={noticeSnackbarStatus} />
+
+      <NoticeSnackbar message={snackbarMessage} onClose={handleCloseSnackbar} />
+
+      <NewTodoForm onAddTodo={handleAddTodo} />
+
+      <TodoList
+        todos={todos}
+        onToggleComplete={toggleComplete}
+        onRemoveTodo={removeTodo}
+        onEditTodo={editTodo} // 전달
+      />
     </>
   );
-}
+};
 
-export default function themeApp() {
+
+export default function ThemeApp() {
   const theme = RootTheme();
 
   return (
